@@ -14,13 +14,17 @@ var PDFParser = (function () {
     var _binBuffer = {};
     var _maxBinBufferCount = 10;
 
+    var _opts = {};
+
     // constructor
-    var cls = function (context, needRawText) {
+    var cls = function (context, needRawText, opts) {
 		//call constructor for super class
 		nodeEvents.EventEmitter.call(this);
-	
+
         // private
         var _id = _nextId++;
+
+        _opts = opts || {};
 
         // public (every instance will have their own copy of these methods, needs to be lightweight)
         this.get_id = function() { return _id; };
@@ -31,7 +35,7 @@ var PDFParser = (function () {
 
         this.pdfFilePath = null; //current PDF file to load and parse, null means loading/parsing not started
         this.data = null; //if file read success, data is PDF content; if failed, data is "err" object
-        this.PDFJS = new PDFJS(needRawText);
+        this.PDFJS = new PDFJS(needRawText, _opts);
         this.parsePropCount = 0;
         this.processFieldInfoXML = false;//disable additional _fieldInfo.xml parsing and merging
     };
@@ -47,15 +51,27 @@ var PDFParser = (function () {
     var _onPDFJSParseDataReady = function(data) {
         _.extend(this.data, data);
         this.parsePropCount++;
-        if (this.parsePropCount >= 2) {
+        if (this.parsePropCount >= _maxParsePropCount()) {
             this.emit("pdfParser_dataReady", this);
             nodeUtil.p2jinfo("PDF parsing completed.");
         }
     };
 
+    var _maxParsePropCount = function() {
+      if(_opts.onlyScrapeMetadata) {
+        return 1;
+      }else{
+        return 2;
+      }
+    };
+
     var _onPDFJSParserDataError = function(data) {
         this.data = data;
         this.emit("pdfParser_dataError", this);
+    };
+
+    var _onPDFJSParserDataProgress = function(progress) {
+      this.emit("pdfParser_dataProgress", progress);
     };
 
     var startParsingPDF = function(buffer) {
@@ -64,6 +80,7 @@ var PDFParser = (function () {
 
         this.PDFJS.on("pdfjs_parseDataReady", _.bind(_onPDFJSParseDataReady, this));
         this.PDFJS.on("pdfjs_parseDataError", _.bind(_onPDFJSParserDataError, this));
+        this.PDFJS.on("pdfjs_parseDataProgress", _.bind(_onPDFJSParserDataProgress, this));
 
         this.PDFJS.parsePDFData(buffer || _binBuffer[this.pdfFilePath]);
     };
@@ -105,7 +122,6 @@ var PDFParser = (function () {
 
     // public (every instance will share the same method, but has no access to private fields defined in constructor)
     cls.prototype.loadPDF = function (pdfFilePath, verbosity) {
-        nodeUtil.verbosity(verbosity);
         nodeUtil.p2jinfo("about to load PDF file " + pdfFilePath);
 
         this.pdfFilePath = pdfFilePath;
@@ -122,6 +138,7 @@ var PDFParser = (function () {
 
     // Introduce a way to directly process buffers without the need to write it to a temporary file
     cls.prototype.parseBuffer = function (pdfBuffer) {
+        nodeUtil.verbosity(5);
         startParsingPDF.call(this, pdfBuffer);
     };
 
@@ -151,4 +168,3 @@ var PDFParser = (function () {
 })();
 
 module.exports = PDFParser;
-
