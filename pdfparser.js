@@ -138,7 +138,6 @@ var PDFParser = (function () {
 
     // Introduce a way to directly process buffers without the need to write it to a temporary file
     cls.prototype.parseBuffer = function (pdfBuffer) {
-        nodeUtil.verbosity(5);
         startParsingPDF.call(this, pdfBuffer);
     };
 
